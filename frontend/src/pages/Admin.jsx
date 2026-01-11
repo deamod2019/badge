@@ -56,6 +56,7 @@ export default function Admin() {
         { id: 'manage', label: '✏️ 徽章管理' },
         { id: 'quotas', label: '📋 配额管理' },
         { id: 'rules', label: '⚙️ 规则管理' },
+        { id: 'config', label: '🔧 配置管理' },
         { id: 'events', label: '📡 事件日志' },
         { id: 'users', label: '👥 用户管理' },
     ];
@@ -83,7 +84,8 @@ export default function Admin() {
             {activeTab === 'grant' && <GrantBadgeTab users={users} badges={badges} organizations={organizations} tags={tags} onRefresh={loadData} />}
             {activeTab === 'manage' && <ManageBadgesTab badges={badges} onRefresh={loadData} />}
             {activeTab === 'quotas' && <QuotasTab users={users} organizations={organizations} tags={tags} />}
-            {activeTab === 'rules' && <RulesTab rules={rules} />}
+            {activeTab === 'rules' && <RulesTab rules={rules} badges={badges} onRefresh={loadData} />}
+            {activeTab === 'config' && <ConfigTab />}
             {activeTab === 'events' && <EventsTab events={events} />}
             {activeTab === 'users' && <UsersTab users={users} tags={tags} />}
         </div>
@@ -822,41 +824,392 @@ function getLevelClass(level) {
 }
 
 // ==================== 规则管理 Tab ====================
-function RulesTab({ rules }) {
+function RulesTab({ rules: initialRules, badges, onRefresh }) {
+    const [rules, setRules] = useState(initialRules);
+    const [showForm, setShowForm] = useState(false);
+    const [editingRule, setEditingRule] = useState(null);
+    const [filter, setFilter] = useState('all');
+
+    useEffect(() => {
+        setRules(initialRules);
+    }, [initialRules]);
+
+    const filteredRules = rules.filter(r => {
+        if (filter === 'all') return true;
+        if (filter === 'enabled') return r.is_enabled;
+        if (filter === 'disabled') return !r.is_enabled;
+        return true;
+    });
+
+    async function handleToggle(rule) {
+        try {
+            await api.toggleRule(rule.id, !rule.is_enabled);
+            onRefresh?.();
+        } catch (error) {
+            alert('操作失败: ' + error.message);
+        }
+    }
+
+    async function handleDelete(rule) {
+        if (!confirm(`确定要删除规则 "${rule.name}" 吗？`)) return;
+        try {
+            await api.deleteRule(rule.id);
+            onRefresh?.();
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    }
+
     return (
         <div className="animate-fade-in">
             <div className="card">
                 <div className="card-header">
-                    <h3 className="card-title">规则列表</h3>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>共 {rules.length} 条规则</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <h3 className="card-title">规则列表</h3>
+                        <div className="badge-filters">
+                            {['all', 'enabled', 'disabled'].map(f => (
+                                <button
+                                    key={f}
+                                    className={`filter-chip ${filter === f ? 'active' : ''}`}
+                                    onClick={() => setFilter(f)}
+                                >
+                                    {f === 'all' ? '全部' : f === 'enabled' ? '已启用' : '已禁用'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={() => { setEditingRule(null); setShowForm(true); }}>
+                        + 新建规则
+                    </button>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {rules.map(rule => (
-                        <div key={rule.id} style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '8px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                        <span style={{ fontWeight: 600 }}>{rule.name}</span>
-                                        <span style={{
-                                            padding: '2px 8px', borderRadius: '4px', fontSize: '12px',
-                                            background: rule.is_enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                                            color: rule.is_enabled ? 'var(--success)' : 'var(--error)',
-                                        }}>
-                                            {rule.is_enabled ? '启用' : '禁用'}
-                                        </span>
+
+                {filteredRules.length === 0 ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                        暂无规则，点击上方按钮创建
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {filteredRules.map(rule => (
+                            <div key={rule.id} style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                            <span style={{ fontWeight: 600, fontSize: '16px' }}>{rule.name}</span>
+                                            <span style={{
+                                                padding: '2px 8px', borderRadius: '4px', fontSize: '12px',
+                                                background: rule.is_enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                                color: rule.is_enabled ? 'var(--success)' : 'var(--error)',
+                                            }}>
+                                                {rule.is_enabled ? '启用' : '禁用'}
+                                            </span>
+                                        </div>
+                                        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '12px' }}>{rule.description}</p>
+
+                                        <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}>
+                                            <div>
+                                                <span style={{ color: 'var(--text-tertiary)' }}>触发条件: </span>
+                                                <span style={{ color: 'var(--primary-400)' }}>
+                                                    {rule.condition?.event || '任意事件'}
+                                                    {rule.condition?.metric && ` (${rule.condition.metric})`}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: 'var(--text-tertiary)' }}>授予徽章: </span>
+                                                <span style={{ color: 'var(--warning)' }}>{rule.action?.grant_badge || '-'}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: 'var(--text-tertiary)' }}>优先级: </span>
+                                                <span>{rule.priority}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: 'var(--text-tertiary)' }}>冷却期: </span>
+                                                <span>{rule.cooldown_days || 0}天</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '8px' }}>{rule.description}</p>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                                        优先级: {rule.priority} | 冷却期: {rule.cooldown_days || 0}天
+
+                                    <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                                        <button className="btn btn-ghost" onClick={() => { setEditingRule(rule); setShowForm(true); }}>
+                                            编辑
+                                        </button>
+                                        <button className="btn btn-ghost" onClick={() => handleToggle(rule)}>
+                                            {rule.is_enabled ? '禁用' : '启用'}
+                                        </button>
+                                        <button className="btn btn-ghost" style={{ color: 'var(--error)' }} onClick={() => handleDelete(rule)}>
+                                            删除
+                                        </button>
                                     </div>
                                 </div>
-                                <code style={{ fontSize: '11px', padding: '8px', background: 'var(--bg-secondary)', borderRadius: '4px', maxWidth: '250px' }}>
-                                    {JSON.stringify(rule.condition, null, 2)}
-                                </code>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {showForm && (
+                <RuleFormModal
+                    rule={editingRule}
+                    badges={badges}
+                    onClose={() => setShowForm(false)}
+                    onSave={() => { setShowForm(false); onRefresh?.(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+// 规则表单弹窗
+function RuleFormModal({ rule, badges, onClose, onSave }) {
+    const [form, setForm] = useState({
+        name: rule?.name || '',
+        description: rule?.description || '',
+        priority: rule?.priority || 100,
+        cooldown_days: rule?.cooldown_days || 0,
+        is_enabled: rule?.is_enabled ?? true,
+        // 条件
+        event_name: rule?.condition?.event || '',
+        metric_field: '',
+        metric_operator: '>=',
+        metric_value: '',
+        // 动作
+        grant_badge: rule?.action?.grant_badge || '',
+        points: rule?.action?.points || 0,
+    });
+    const [saving, setSaving] = useState(false);
+    const [eventTypes, setEventTypes] = useState([]);
+    const [metricFields, setMetricFields] = useState([]);
+
+    // 加载事件类型和指标字段
+    useEffect(() => {
+        async function loadConfig() {
+            try {
+                const [eventsRes, metricsRes] = await Promise.all([
+                    api.getEventTypes({ is_active: true }),
+                    api.getMetricFields({ is_active: true }),
+                ]);
+                setEventTypes(eventsRes.data || []);
+                setMetricFields(metricsRes.data || []);
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+        loadConfig();
+    }, []);
+
+    // 解析已有规则的 metric
+    useEffect(() => {
+        if (rule?.condition?.metric) {
+            const match = rule.condition.metric.match(/^(\w+)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
+            if (match) {
+                setForm(prev => ({
+                    ...prev,
+                    metric_field: match[1],
+                    metric_operator: match[2],
+                    metric_value: match[3],
+                }));
+            }
+        }
+    }, [rule]);
+
+    const operators = [
+        { value: '>=', label: '>= 大于等于' },
+        { value: '<=', label: '<= 小于等于' },
+        { value: '>', label: '> 大于' },
+        { value: '<', label: '< 小于' },
+        { value: '==', label: '== 等于' },
+        { value: '!=', label: '!= 不等于' },
+    ];
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        if (!form.name || !form.event_name || !form.grant_badge) {
+            alert('请填写规则名称、触发事件和授予徽章');
+            return;
+        }
+
+        setSaving(true);
+        try {
+            // 构建条件
+            const condition = { event: form.event_name };
+            if (form.metric_field && form.metric_value) {
+                condition.metric = `${form.metric_field} ${form.metric_operator} ${form.metric_value}`;
+            }
+
+            // 构建动作
+            const action = {
+                grant_badge: form.grant_badge,
+                points: form.points || 0,
+            };
+
+            const ruleData = {
+                name: form.name,
+                description: form.description,
+                priority: form.priority,
+                cooldown_days: form.cooldown_days,
+                is_enabled: form.is_enabled,
+                condition,
+                action,
+            };
+
+            if (rule) {
+                await api.updateRule(rule.id, ruleData);
+            } else {
+                await api.createRule(ruleData);
+            }
+            onSave();
+        } catch (error) {
+            alert('保存失败: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+        }} onClick={onClose}>
+            <div className="card" style={{ width: '600px', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="card-header">
+                    <h3 className="card-title">{rule ? '编辑规则' : '新建规则'}</h3>
+                    <button className="btn btn-ghost" onClick={onClose}>×</button>
+                </div>
+
+                <form onSubmit={handleSubmit} style={{ padding: '0 24px 24px' }}>
+                    {/* 基本信息 */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ marginBottom: '12px', color: 'var(--text-secondary)', fontSize: '14px' }}>📋 基本信息</h4>
+                        <div style={{ display: 'grid', gap: '12px' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>规则名称 *</label>
+                                <input
+                                    className="input"
+                                    value={form.name}
+                                    onChange={e => setForm({ ...form, name: e.target.value })}
+                                    placeholder="例如：攻坚先锋规则"
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>规则描述</label>
+                                <textarea
+                                    className="input"
+                                    value={form.description}
+                                    onChange={e => setForm({ ...form, description: e.target.value })}
+                                    rows={2}
+                                    placeholder="描述这条规则的触发条件和效果"
+                                />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>优先级</label>
+                                    <input
+                                        className="input"
+                                        type="number"
+                                        value={form.priority}
+                                        onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 0 })}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>冷却期（天）</label>
+                                    <input
+                                        className="input"
+                                        type="number"
+                                        value={form.cooldown_days}
+                                        onChange={e => setForm({ ...form, cooldown_days: parseInt(e.target.value) || 0 })}
+                                    />
+                                </div>
                             </div>
                         </div>
-                    ))}
-                </div>
+                    </div>
+
+                    {/* 触发条件 */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ marginBottom: '12px', color: 'var(--text-secondary)', fontSize: '14px' }}>⚡ 触发条件</h4>
+                        <div style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '8px' }}>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>触发事件 *</label>
+                                <select
+                                    className="input select"
+                                    value={form.event_name}
+                                    onChange={e => setForm({ ...form, event_name: e.target.value })}
+                                >
+                                    <option value="">请选择事件类型</option>
+                                    {eventTypes.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>指标条件（可选）</label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <select
+                                        className="input select"
+                                        style={{ flex: 1 }}
+                                        value={form.metric_field}
+                                        onChange={e => setForm({ ...form, metric_field: e.target.value })}
+                                    >
+                                        <option value="">选择指标</option>
+                                        {metricFields.map(f => <option key={f.id} value={f.field_key}>{f.label}</option>)}
+                                    </select>
+                                    <select
+                                        className="input select"
+                                        style={{ width: '140px' }}
+                                        value={form.metric_operator}
+                                        onChange={e => setForm({ ...form, metric_operator: e.target.value })}
+                                    >
+                                        {operators.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                    <input
+                                        className="input"
+                                        style={{ width: '100px' }}
+                                        value={form.metric_value}
+                                        onChange={e => setForm({ ...form, metric_value: e.target.value })}
+                                        placeholder="值"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 执行动作 */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ marginBottom: '12px', color: 'var(--text-secondary)', fontSize: '14px' }}>🎯 执行动作</h4>
+                        <div style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>授予徽章 *</label>
+                                    <select
+                                        className="input select"
+                                        value={form.grant_badge}
+                                        onChange={e => setForm({ ...form, grant_badge: e.target.value })}
+                                    >
+                                        <option value="">请选择徽章</option>
+                                        {badges?.filter(b => b.is_active && !b.is_deleted).map(b => (
+                                            <option key={b.id} value={b.id}>{b.name} ({b.level})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>额外积分</label>
+                                    <input
+                                        className="input"
+                                        type="number"
+                                        value={form.points}
+                                        onChange={e => setForm({ ...form, points: parseInt(e.target.value) || 0 })}
+                                        placeholder="0"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 提交按钮 */}
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
+                        <button type="submit" className="btn btn-primary" disabled={saving}>
+                            {saving ? '保存中...' : '💾 保存规则'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
@@ -1199,6 +1552,346 @@ function QuotaFormModal({ quota, users, organizations, tags, categories, onSave,
                         <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onSave(form)} disabled={!form.owner_user_id || !form.scope_id}>保存</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// ==================== 配置管理 Tab ====================
+function ConfigTab() {
+    const [activeSection, setActiveSection] = useState('events');
+    const [eventTypes, setEventTypes] = useState([]);
+    const [metricFields, setMetricFields] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [editingItem, setEditingItem] = useState(null);
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    async function loadData() {
+        setLoading(true);
+        try {
+            const [eventsRes, metricsRes] = await Promise.all([
+                api.getEventTypes(),
+                api.getMetricFields(),
+            ]);
+            setEventTypes(eventsRes.data || []);
+            setMetricFields(metricsRes.data || []);
+        } catch (error) {
+            console.error('加载配置失败:', error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleToggle(item, type) {
+        try {
+            if (type === 'event') {
+                await api.updateEventType(item.id, { is_active: !item.is_active });
+            } else {
+                await api.updateMetricField(item.id, { is_active: !item.is_active });
+            }
+            loadData();
+        } catch (error) {
+            alert('操作失败: ' + error.message);
+        }
+    }
+
+    async function handleDelete(item, type) {
+        if (!confirm(`确定要删除 "${type === 'event' ? item.name : item.label}" 吗？`)) return;
+        try {
+            if (type === 'event') {
+                await api.deleteEventType(item.id);
+            } else {
+                await api.deleteMetricField(item.id);
+            }
+            loadData();
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    if (loading) {
+        return <div className="loading"><div className="spinner" /></div>;
+    }
+
+    return (
+        <div className="animate-fade-in">
+            {/* 切换按钮 */}
+            <div className="badge-filters" style={{ marginBottom: '24px' }}>
+                <button
+                    className={`filter-chip ${activeSection === 'events' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('events')}
+                >
+                    ⚡ 事件类型 ({eventTypes.length})
+                </button>
+                <button
+                    className={`filter-chip ${activeSection === 'metrics' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('metrics')}
+                >
+                    📊 指标字段 ({metricFields.length})
+                </button>
+            </div>
+
+            {/* 事件类型管理 */}
+            {activeSection === 'events' && (
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title">事件类型配置</h3>
+                        <button className="btn btn-primary" onClick={() => { setEditingItem(null); setShowForm(true); }}>
+                            + 添加事件类型
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {eventTypes.map(item => (
+                            <div key={item.id} style={{
+                                padding: '12px 16px', background: 'var(--bg-tertiary)', borderRadius: '8px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                opacity: item.is_active ? 1 : 0.5,
+                            }}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontWeight: 600 }}>{item.name}</span>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', padding: '2px 8px', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                                            {item.source || '手动'}
+                                        </span>
+                                        {!item.is_active && (
+                                            <span style={{ fontSize: '12px', color: 'var(--error)', padding: '2px 8px', background: 'rgba(239, 68, 68, 0.2)', borderRadius: '4px' }}>
+                                                已禁用
+                                            </span>
+                                        )}
+                                    </div>
+                                    {item.description && (
+                                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>{item.description}</p>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-ghost" onClick={() => { setEditingItem({ ...item, type: 'event' }); setShowForm(true); }}>编辑</button>
+                                    <button className="btn btn-ghost" onClick={() => handleToggle(item, 'event')}>{item.is_active ? '禁用' : '启用'}</button>
+                                    <button className="btn btn-ghost" style={{ color: 'var(--error)' }} onClick={() => handleDelete(item, 'event')}>删除</button>
+                                </div>
+                            </div>
+                        ))}
+                        {eventTypes.length === 0 && (
+                            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                暂无事件类型，点击上方按钮添加
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 指标字段管理 */}
+            {activeSection === 'metrics' && (
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title">指标字段配置</h3>
+                        <button className="btn btn-primary" onClick={() => { setEditingItem(null); setShowForm(true); }}>
+                            + 添加指标字段
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {metricFields.map(item => (
+                            <div key={item.id} style={{
+                                padding: '12px 16px', background: 'var(--bg-tertiary)', borderRadius: '8px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                opacity: item.is_active ? 1 : 0.5,
+                            }}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontWeight: 600 }}>{item.label}</span>
+                                        <code style={{ fontSize: '12px', color: 'var(--primary-400)', padding: '2px 8px', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                                            {item.field_key}
+                                        </code>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                                            ({item.data_type})
+                                        </span>
+                                        {!item.is_active && (
+                                            <span style={{ fontSize: '12px', color: 'var(--error)', padding: '2px 8px', background: 'rgba(239, 68, 68, 0.2)', borderRadius: '4px' }}>
+                                                已禁用
+                                            </span>
+                                        )}
+                                    </div>
+                                    {item.description && (
+                                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>{item.description}</p>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-ghost" onClick={() => { setEditingItem({ ...item, type: 'metric' }); setShowForm(true); }}>编辑</button>
+                                    <button className="btn btn-ghost" onClick={() => handleToggle(item, 'metric')}>{item.is_active ? '禁用' : '启用'}</button>
+                                    <button className="btn btn-ghost" style={{ color: 'var(--error)' }} onClick={() => handleDelete(item, 'metric')}>删除</button>
+                                </div>
+                            </div>
+                        ))}
+                        {metricFields.length === 0 && (
+                            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                暂无指标字段，点击上方按钮添加
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 表单弹窗 */}
+            {showForm && (
+                <ConfigFormModal
+                    item={editingItem}
+                    type={activeSection === 'events' ? 'event' : 'metric'}
+                    onClose={() => setShowForm(false)}
+                    onSave={() => { setShowForm(false); loadData(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+// 配置项表单弹窗
+function ConfigFormModal({ item, type: defaultType, onClose, onSave }) {
+    const type = item?.type || defaultType;
+    const isEvent = type === 'event';
+
+    const [form, setForm] = useState(isEvent ? {
+        name: item?.name || '',
+        description: item?.description || '',
+        source: item?.source || '',
+    } : {
+        field_key: item?.field_key || '',
+        label: item?.label || '',
+        data_type: item?.data_type || 'number',
+        description: item?.description || '',
+    });
+    const [saving, setSaving] = useState(false);
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        if (isEvent && !form.name) {
+            alert('请填写事件名称'); return;
+        }
+        if (!isEvent && (!form.field_key || !form.label)) {
+            alert('请填写字段键和标签'); return;
+        }
+
+        setSaving(true);
+        try {
+            if (item) {
+                if (isEvent) {
+                    await api.updateEventType(item.id, form);
+                } else {
+                    await api.updateMetricField(item.id, form);
+                }
+            } else {
+                if (isEvent) {
+                    await api.createEventType(form);
+                } else {
+                    await api.createMetricField(form);
+                }
+            }
+            onSave();
+        } catch (error) {
+            alert('保存失败: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+        }} onClick={onClose}>
+            <div className="card" style={{ width: '480px' }} onClick={e => e.stopPropagation()}>
+                <div className="card-header">
+                    <h3 className="card-title">{item ? '编辑' : '添加'}{isEvent ? '事件类型' : '指标字段'}</h3>
+                    <button className="btn btn-ghost" onClick={onClose}>×</button>
+                </div>
+                <form onSubmit={handleSubmit} style={{ padding: '0 24px 24px' }}>
+                    {isEvent ? (
+                        <>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>事件名称 *</label>
+                                <input
+                                    className="input"
+                                    value={form.name}
+                                    onChange={e => setForm({ ...form, name: e.target.value })}
+                                    placeholder="例如：项目交付评审通过"
+                                />
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>来源系统</label>
+                                <input
+                                    className="input"
+                                    value={form.source}
+                                    onChange={e => setForm({ ...form, source: e.target.value })}
+                                    placeholder="例如：project-platform"
+                                />
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>描述</label>
+                                <textarea
+                                    className="input"
+                                    value={form.description}
+                                    onChange={e => setForm({ ...form, description: e.target.value })}
+                                    rows={2}
+                                    placeholder="事件触发条件说明"
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>字段键 *</label>
+                                <input
+                                    className="input"
+                                    value={form.field_key}
+                                    onChange={e => setForm({ ...form, field_key: e.target.value })}
+                                    placeholder="例如：completion_rate"
+                                    disabled={!!item}
+                                />
+                                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>用于规则条件中的字段标识，创建后不可修改</p>
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>显示标签 *</label>
+                                <input
+                                    className="input"
+                                    value={form.label}
+                                    onChange={e => setForm({ ...form, label: e.target.value })}
+                                    placeholder="例如：完成率"
+                                />
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>数据类型</label>
+                                <select
+                                    className="input select"
+                                    value={form.data_type}
+                                    onChange={e => setForm({ ...form, data_type: e.target.value })}
+                                >
+                                    <option value="number">数字 (number)</option>
+                                    <option value="string">文本 (string)</option>
+                                    <option value="boolean">布尔 (boolean)</option>
+                                </select>
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>描述</label>
+                                <textarea
+                                    className="input"
+                                    value={form.description}
+                                    onChange={e => setForm({ ...form, description: e.target.value })}
+                                    rows={2}
+                                    placeholder="字段用途说明"
+                                />
+                            </div>
+                        </>
+                    )}
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>取消</button>
+                        <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
+                            {saving ? '保存中...' : '💾 保存'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );

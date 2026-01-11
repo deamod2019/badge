@@ -16,6 +16,7 @@ import organizationsRouter from './routes/organizations.js';
 import tagsRouter from './routes/tags.js';
 import uploadRouter from './routes/upload.js';
 import quotasRouter from './routes/quotas.js';
+import configRouter from './routes/config.js';
 
 // 初始化示例数据
 import { initSeedData } from './seed.js';
@@ -49,6 +50,7 @@ app.use('/api/organizations', organizationsRouter);
 app.use('/api/tags', tagsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/quotas', quotasRouter);
+app.use('/api/config', configRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

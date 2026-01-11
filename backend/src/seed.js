@@ -236,6 +236,48 @@ export function initSeedData() {
         updateUserPoints.run(ub.points, ub.user_id);
     }
 
+    // 创建事件类型
+    const eventTypes = [
+        { id: 'EVT-001', name: '项目交付里程碑达成', description: '项目完成重要里程碑交付', source: 'project-platform', sort_order: 1 },
+        { id: 'EVT-002', name: '课程完成', description: '完成在线学习课程', source: 'learning-platform', sort_order: 2 },
+        { id: 'EVT-003', name: '考试通过', description: '通过技能认证考试', source: 'learning-platform', sort_order: 3 },
+        { id: 'EVT-004', name: '文档贡献', description: '提交或编辑团队文档', source: 'collaboration-platform', sort_order: 4 },
+        { id: 'EVT-005', name: '创新案例通过', description: '创新案例通过评审', source: 'innovation-platform', sort_order: 5 },
+        { id: 'EVT-006', name: '代码质量评估', description: '代码质量评估结果', source: 'code-analysis', sort_order: 6 },
+        { id: 'EVT-007', name: '会议纪要贡献', description: '完成会议纪要编写', source: 'collaboration-platform', sort_order: 7 },
+        { id: 'EVT-008', name: '学习时长达标', description: '累计学习时长达到目标', source: 'learning-platform', sort_order: 8 },
+    ];
+
+    const insertEventType = db.prepare(`
+        INSERT INTO event_types (id, name, description, source, sort_order)
+        VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (const et of eventTypes) {
+        insertEventType.run(et.id, et.name, et.description, et.source, et.sort_order);
+    }
+
+    // 创建指标字段
+    const metricFields = [
+        { id: 'MET-001', field_key: 'deliverable_score', label: '交付评分', data_type: 'number', description: '项目交付质量评分(0-100)', sort_order: 1 },
+        { id: 'MET-002', field_key: 'course_hours', label: '学习时长', data_type: 'number', description: '累计学习时长(小时)', sort_order: 2 },
+        { id: 'MET-003', field_key: 'contribution_count', label: '贡献数量', data_type: 'number', description: '贡献的文档/代码数量', sort_order: 3 },
+        { id: 'MET-004', field_key: 'quality_grade', label: '质量等级', data_type: 'string', description: '代码质量等级(A/B/C/D)', sort_order: 4 },
+        { id: 'MET-005', field_key: 'consecutive_months', label: '连续月数', data_type: 'number', description: '连续达标的月数', sort_order: 5 },
+        { id: 'MET-006', field_key: 'approval_status', label: '审批状态', data_type: 'string', description: '审批结果状态', sort_order: 6 },
+        { id: 'MET-007', field_key: 'score', label: '得分', data_type: 'number', description: '通用评分字段', sort_order: 7 },
+        { id: 'MET-008', field_key: 'count', label: '数量', data_type: 'number', description: '通用计数字段', sort_order: 8 },
+    ];
+
+    const insertMetricField = db.prepare(`
+        INSERT INTO metric_fields (id, field_key, label, data_type, description, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const mf of metricFields) {
+        insertMetricField.run(mf.id, mf.field_key, mf.label, mf.data_type, mf.description, mf.sort_order);
+    }
+
     console.log('✅ 种子数据初始化完成');
     console.log(`   - ${organizations.length} 个组织`);
     console.log(`   - ${tags.length} 个标签`);
@@ -244,4 +286,6 @@ export function initSeedData() {
     console.log(`   - ${badges.length} 个徽章定义`);
     console.log(`   - ${rules.length} 条规则`);
     console.log(`   - ${userBadges.length} 个用户徽章`);
+    console.log(`   - ${eventTypes.length} 个事件类型`);
+    console.log(`   - ${metricFields.length} 个指标字段`);
 }

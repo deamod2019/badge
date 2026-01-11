@@ -190,6 +190,26 @@ class ApiService {
         });
     }
 
+    async updateRule(id, ruleData) {
+        return this.request(`/rules/${id}`, {
+            method: 'PUT',
+            body: ruleData,
+        });
+    }
+
+    async deleteRule(id) {
+        return this.request(`/rules/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async toggleRule(id, isEnabled) {
+        return this.request(`/rules/${id}`, {
+            method: 'PUT',
+            body: { is_enabled: isEnabled },
+        });
+    }
+
     // 统计相关
     async getStatsOverview() {
         return this.request('/stats/overview');
@@ -275,6 +295,61 @@ class ApiService {
     async getQuotaCategories() {
         return this.request('/quotas/meta/categories');
     }
+
+    // ==================== 配置管理 APIs ====================
+
+    // 事件类型
+    async getEventTypes(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return this.request(`/config/event-types${query ? `?${query}` : ''}`);
+    }
+
+    async createEventType(data) {
+        return this.request('/config/event-types', {
+            method: 'POST',
+            body: data,
+        });
+    }
+
+    async updateEventType(id, data) {
+        return this.request(`/config/event-types/${id}`, {
+            method: 'PUT',
+            body: data,
+        });
+    }
+
+    async deleteEventType(id) {
+        return this.request(`/config/event-types/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    // 指标字段
+    async getMetricFields(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return this.request(`/config/metric-fields${query ? `?${query}` : ''}`);
+    }
+
+    async createMetricField(data) {
+        return this.request('/config/metric-fields', {
+            method: 'POST',
+            body: data,
+        });
+    }
+
+    async updateMetricField(id, data) {
+        return this.request(`/config/metric-fields/${id}`, {
+            method: 'PUT',
+            body: data,
+        });
+    }
+
+    async deleteMetricField(id) {
+        return this.request(`/config/metric-fields/${id}`, {
+            method: 'DELETE',
+        });
+    }
 }
 
 export default new ApiService();
+

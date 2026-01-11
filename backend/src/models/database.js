@@ -187,6 +187,29 @@ export async function initDatabase() {
       FOREIGN KEY (quota_id) REFERENCES quota_definitions(id),
       UNIQUE(quota_id, period_key)
     );
+
+    -- 事件类型定义表
+    CREATE TABLE IF NOT EXISTS event_types (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      source TEXT,
+      is_active INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 指标字段定义表
+    CREATE TABLE IF NOT EXISTS metric_fields (
+      id TEXT PRIMARY KEY,
+      field_key TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      data_type TEXT DEFAULT 'number',
+      description TEXT,
+      is_active INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   saveDatabase();
